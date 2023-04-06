@@ -55,6 +55,27 @@ def aruco_display(corners, ids, rejected, image):
 
     return image
 
+def stretch_polygon_to_rectangle(points, image):
+    # Define the dimensions of the output rectangle
+    width = image.shape[1]
+    height = image.shape[1]
+
+    # Define the corners of the output rectangle
+    dst = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float32)
+
+    # Convert the input points to a numpy array
+    src = np.array(points, dtype=np.float32)
+
+    # Reshape the input points to the correct format
+    src = src.reshape((4, 2))
+
+    # Get the perspective transform matrix
+    M = cv2.getPerspectiveTransform(src, dst)
+
+    # Apply the perspective transform to the image
+    warped = cv2.warpPerspective(image, M, (width, height))
+
+    return warped
 
 def trim_by_corners(img, corners, ids):
     mm = {}
@@ -64,11 +85,13 @@ def trim_by_corners(img, corners, ids):
             markerID = int(ids[i])
             mm[markerID] = marker_corners
         polygon = np.array([mm[0][3], mm[1][2], mm[2][1], mm[3][0]])
-        polygon = polygon.astype(np.int32)
-        mask = np.zeros(img.shape[:2], np.uint8)
-        cv2.fillPoly(mask, [polygon], (255, 255, 255))
-        dst = cv2.bitwise_and(img, img, mask=mask)
-        return dst
+        polygon = polygon.astype(np.float32)
+
+        # Stretch the polygon to a rectangle
+        warped = stretch_polygon_to_rectangle(polygon, img)
+
+        return warped
+
     else:
         return img
 
@@ -91,8 +114,8 @@ corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=aruc
 
 detected_markers = aruco_display(corners, ids, rejected, img)
 
-#cv2.imshow("Image", detected_markers)
-#cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+# cv2.imshow("Image", detected_markers)
+# cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
 
 
 cap = cv2.VideoCapture(0)
@@ -105,7 +128,7 @@ while cap.isOpened():
 
     h, w, _ = img.shape
 
-    width = 1000
+    width = 800
     height = int(width * (h / w))
     img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
 
