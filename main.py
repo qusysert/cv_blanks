@@ -57,8 +57,8 @@ def aruco_display(corners, ids, rejected, image):
 
 def stretch_polygon_to_rectangle(points, image):
     # Define the dimensions of the output rectangle
-    width = image.shape[1]
-    height = image.shape[1]
+    width = 740
+    height = 900
 
     # Define the corners of the output rectangle
     dst = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float32)
@@ -102,7 +102,7 @@ arucoDict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[aruco_type])
 
 arucoParams = cv2.aruco.DetectorParameters()
 
-img = cv2.imread("blanks/live_blank2.jpg")
+img = cv2.imread("blanks/blank_aruco.png")
 
 h, w, _ = img.shape
 
@@ -114,36 +114,36 @@ corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=aruc
 
 detected_markers = aruco_display(corners, ids, rejected, img)
 
-# cv2.imshow("Image", detected_markers)
-# cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+cv2.imshow("Image", detected_markers)
+cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
 
 
-cap = cv2.VideoCapture(0)
-
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-while cap.isOpened():
-    ret, img = cap.read()
-
-    h, w, _ = img.shape
-
-    width = 800
-    height = int(width * (h / w))
-    img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
-
-    corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=arucoParams)
-
-    detected_markers = aruco_display(corners, ids, rejected, img)
-
-    cv2.imshow("Image", detected_markers)
-    cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
-
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord("q"):
-        break
+# cap = cv2.VideoCapture(0)
+#
+# cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+# cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+#
+# while cap.isOpened():
+#     ret, img = cap.read()
+#
+#     h, w, _ = img.shape
+#
+#     width = 800
+#     height = int(width * (h / w))
+#     img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
+#
+#     corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=arucoParams)
+#
+#     detected_markers = aruco_display(corners, ids, rejected, img)
+#
+#     cv2.imshow("Image", detected_markers)
+#     cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+#
+#     key = cv2.waitKey(1) & 0xFF
+#     if key == ord("q"):
+#         break
 
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
-cap.release()
+# cap.release()
