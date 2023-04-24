@@ -26,6 +26,34 @@ ARUCO_DICT = {
 }
 
 
+def stream_webcam():
+    cap = cv2.VideoCapture(0)
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+    while cap.isOpened():
+        ret, img = cap.read()
+
+        h, w, _ = img.shape
+
+        width = 800
+        height = int(width * (h / w))
+        img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
+
+        corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=arucoParams)
+
+        detected_markers = aruco_display(corners, ids, rejected, img)
+
+        cv2.imshow("Image", detected_markers)
+        cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            cap.release()
+            break
+
+
 def aruco_display(corners, ids, rejected, image):
     if len(corners) > 0:
         for i, markerCorner in enumerate(corners):
@@ -55,6 +83,7 @@ def aruco_display(corners, ids, rejected, image):
 
     return image
 
+
 def stretch_polygon_to_rectangle(points, image):
     # Define the dimensions of the output rectangle
     width = 740
@@ -76,6 +105,7 @@ def stretch_polygon_to_rectangle(points, image):
     warped = cv2.warpPerspective(image, M, (width, height))
 
     return warped
+
 
 def trim_by_corners(img, corners, ids):
     mm = {}
@@ -102,48 +132,43 @@ arucoDict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[aruco_type])
 
 arucoParams = cv2.aruco.DetectorParameters()
 
-img = cv2.imread("blanks/blank_aruco.png")
+img = cv2.imread("blanks/blank_thicker.png")
 
 h, w, _ = img.shape
-
 width = 700
 height = int(width * (h / w))
 img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
 
 corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=arucoParams)
 
-detected_markers = aruco_display(corners, ids, rejected, img)
 
-cv2.imshow("Image", detected_markers)
-cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+##cv2.imshow("Image", detected_markers)
+##cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+# stream_webcam()
+gray_scale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+th1, img_bin = cv2.threshold(gray_scale, 150, 225, cv2.THRESH_BINARY)
+img_bin = ~img_bin
 
+gray_blurred = cv2.medianBlur(img_bin, 5)
 
-# cap = cv2.VideoCapture(0)
-#
-# cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-# cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-#
-# while cap.isOpened():
-#     ret, img = cap.read()
-#
-#     h, w, _ = img.shape
-#
-#     width = 800
-#     height = int(width * (h / w))
-#     img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
-#
-#     corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=arucoParams)
-#
-#     detected_markers = aruco_display(corners, ids, rejected, img)
-#
-#     cv2.imshow("Image", detected_markers)
-#     cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
-#
-#     key = cv2.waitKey(1) & 0xFF
-#     if key == ord("q"):
-#         break
+# Apply Hough transform on the blurred image.
+detected_circles = cv2.HoughCircles(gray_blurred,
+                                    cv2.HOUGH_GRADIENT, 1, 20, param1=200,
+                                    param2=34, minRadius=10, maxRadius=90)
 
+# Draw circles that are detected.
+if detected_circles is not None:
 
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-# cap.release()
+    # Convert the circle parameters a, b and r to integers.
+    detected_circles = np.uint16(np.around(detected_circles))
+
+    for pt in detected_circles[0, :]:
+        a, b, r = pt[0], pt[1], pt[2]
+
+        # Draw the circumference of the circle.
+        cv2.circle(img, (a, b), r, (0, 255, 0), 2)
+
+        # Draw a small circle (of radius 1) to show the center.
+        cv2.circle(img, (a, b), 1, (0, 0, 255), 3)
+    cv2.imshow("Detected Circle", img)
+    cv2.waitKey(0)
