@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
 
 ARUCO_DICT = {
     "DICT_4X4_50": cv2.aruco.DICT_4X4_50,
@@ -46,7 +47,7 @@ def stream_webcam():
         detected_markers = aruco_display(corners, ids, rejected, img)
 
         cv2.imshow("Image", detected_markers)
-        cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+        cv2.imshow("Trimmed", trim_writing_area(img, corners, ids))
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
@@ -107,32 +108,60 @@ def stretch_polygon_to_rectangle(points, image):
     return warped
 
 
-def trim_by_corners(img, corners, ids):
+def corner_arucos_to_list(corners, ids):
     mm = {}
-    if len(corners) == 4:
-        for i, markerCorner in enumerate(corners):
-            marker_corners = markerCorner.reshape((4, 2))
-            markerID = int(ids[i])
-            mm[markerID] = marker_corners
-        polygon = np.array([mm[0][3], mm[1][2], mm[2][1], mm[3][0]])
+    for i, markerCorner in enumerate(corners):
+        marker_corners = markerCorner.reshape((4, 2))
+        print("marker corner:", markerCorner)
+        marker_id = int(ids[i])
+        mm[marker_id] = marker_corners
+    return mm
+
+
+def trim_service_area(img, corners, ids):
+
+    if 2 in ids and 3 in ids:
+        height, width, _ = img.shape
+        mm = corner_arucos_to_list(corners, ids)
+        polygon = np.array([mm[3][3], mm[2][2], (width - 1, height - 1), (0, height - 1)])
         polygon = polygon.astype(np.float32)
+        mask = np.zeros_like(img)
+        cv2.fillPoly(mask, np.int32([polygon]), (255, 255, 255))
 
-        # Stretch the polygon to a rectangle
-        warped = stretch_polygon_to_rectangle(polygon, img)
+        # Apply the mask to the image
+        masked_img = cv2.bitwise_and(img, mask)
 
-        return warped
+        # Get the bounding rectangle of the polygon
+        x, y, w, h = cv2.boundingRect(np.int32([polygon]))
 
+        # Crop the image using the bounding rectangle
+        crop_img = masked_img[y:y + h, x:x + w]
+        return crop_img
     else:
         return img
 
 
+def trim_writing_area(img, corners, ids):
+    print("Amount of found corners: ", len(corners))
+    if len(corners) == 4:
+        mm = corner_arucos_to_list(corners, ids)
+        polygon = np.array([mm[0][3], mm[1][2], mm[2][1], mm[3][0]])
+        polygon = polygon.astype(np.float32)
+        # Stretch the polygon to a rectangle
+        warped = stretch_polygon_to_rectangle(polygon, img)
+        return warped
+    else:
+        return img
+
+
+print("hi")
 aruco_type = "DICT_4X4_50"
 
 arucoDict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[aruco_type])
 
 arucoParams = cv2.aruco.DetectorParameters()
 
-img = cv2.imread("blanks/blank_thicker.png")
+img = cv2.imread("blanks/blank.png")
 
 h, w, _ = img.shape
 width = 700
@@ -141,34 +170,30 @@ img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
 
 corners, ids, rejected = cv2.aruco.detectMarkers(img, arucoDict, parameters=arucoParams)
 
-
-##cv2.imshow("Image", detected_markers)
-##cv2.imshow("Trimmed", trim_by_corners(img, corners, ids))
+detected_markers = aruco_display(corners, ids, rejected, img)
+cv2.imshow("Image", detected_markers)
+# cv2.imshow("Trimmed", trim_service_area(img, corners, ids))
 # stream_webcam()
+img = trim_service_area(img, corners, ids)
 gray_scale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 th1, img_bin = cv2.threshold(gray_scale, 150, 225, cv2.THRESH_BINARY)
 img_bin = ~img_bin
 
-gray_blurred = cv2.medianBlur(img_bin, 5)
 
-# Apply Hough transform on the blurred image.
-detected_circles = cv2.HoughCircles(gray_blurred,
-                                    cv2.HOUGH_GRADIENT, 1, 20, param1=200,
-                                    param2=34, minRadius=10, maxRadius=90)
+### selecting min size as 15 pixels
+line_min_width = 15
+kernal_h = np.ones((1, line_min_width), np.uint8)
+kernal_v = np.ones((line_min_width, 1), np.uint8)
 
-# Draw circles that are detected.
-if detected_circles is not None:
+img_bin_h = cv2.morphologyEx(img_bin, cv2.MORPH_OPEN, kernal_h)
+img_bin_v = cv2.morphologyEx(img_bin, cv2.MORPH_OPEN, kernal_v)
+img_bin_final = img_bin_h | img_bin_v
+# plt.imshow(img_bin_final, cmap='gray')
+# plt.show()
 
-    # Convert the circle parameters a, b and r to integers.
-    detected_circles = np.uint16(np.around(detected_circles))
+_, labels, stats, _ = cv2.connectedComponentsWithStats(~img_bin_final, connectivity=8, ltype=cv2.CV_32S)
+for x, y, w, h, area in stats[2:]:
+    cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-    for pt in detected_circles[0, :]:
-        a, b, r = pt[0], pt[1], pt[2]
-
-        # Draw the circumference of the circle.
-        cv2.circle(img, (a, b), r, (0, 255, 0), 2)
-
-        # Draw a small circle (of radius 1) to show the center.
-        cv2.circle(img, (a, b), 1, (0, 0, 255), 3)
-    cv2.imshow("Detected Circle", img)
-    cv2.waitKey(0)
+cv2.imshow("S", img)
+cv2.waitKey(0)
